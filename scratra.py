@@ -9,10 +9,14 @@ from array import array
 import threading
 
 # Errors from scratch.py
-class ScratchConnectionError(Exception): pass
-class ScratchNotConnected(ScratchConnectionError): pass
-class ScratchConnectionRefused(ScratchConnectionError): pass
-class ScratchConnectionEstablished(ScratchConnectionError): pass
+class ScratchConnectionError(Exception):
+     pass
+class ScratchNotConnected(ScratchConnectionError):
+     pass
+class ScratchConnectionRefused(ScratchConnectionError):
+     pass
+class ScratchConnectionEstablished(ScratchConnectionError):
+    pass
 
 class ScratchInvalidValue(Exception): pass
 
@@ -124,6 +128,7 @@ class runClass(threading.Thread):
                 (errno,message) = error
                 raise ScratchConnectionError(errno, message)
             if msg:
+                msg = msg.decode("utf-8")
                 # If the message is not a sensor-update, but a broadcast
                 if msg.find('sensor-update')==-1 and 'broadcast' in msg:
                     msg = msg[15:-1]
