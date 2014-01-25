@@ -64,14 +64,18 @@ class Scratch:
 
     @staticmethod
     def toScratchMessage(cmd):
-        # Taken from chalkmarrow
+        # Taken from http://wiki.scratch.mit.edu/wiki/Communicating_to_Scratch_via_Python
         n = len(cmd)
-        a = array('c')
-        a.append(chr((n >> 24) & 0xFF))
-        a.append(chr((n >> 16) & 0xFF))
-        a.append(chr((n >>  8) & 0xFF))
-        a.append(chr(n & 0xFF))
-        return a.tostring() + cmd
+        a = []
+        a.append(((n >> 24) & 0xFF))
+        a.append(((n >> 16) & 0xFF))
+        a.append(((n >> 8) & 0xFF))
+        a.append((n & 0xFF))
+        b = ''
+        for c in a:
+            b += chr(c)
+        return bytes(b+cmd,'UTF-8')
+
 
     @staticmethod
     def atom(msg):
