@@ -4,24 +4,25 @@
 # greatdane ~ easy python implementation with scratch
 # inspired by sinatra(sinatrarb.com) ~ code snippets from scratch.py(bit.ly/scratchpy)
 import socket
+import re
 from errno import *
 from array import array
 import threading
 
 # Errors from scratch.py
 class ScratchConnectionError(Exception):
-     pass
+    pass
 class ScratchNotConnected(ScratchConnectionError):
-     pass
+    pass
 class ScratchConnectionRefused(ScratchConnectionError):
-     pass
+    pass
 class ScratchConnectionEstablished(ScratchConnectionError):
     pass
+class ScratchInvalidValue(Exception):
+    pass
 
-class ScratchInvalidValue(Exception): pass
-
-broadcast_map = {}
-update_map = {}
+broadcast_map = []
+update_map = []
 start_list = []
 end_list = []
 scratchSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -64,7 +65,6 @@ class Scratch:
 
     @staticmethod
     def toScratchMessage(cmd):
-        # Taken from http://wiki.scratch.mit.edu/wiki/Communicating_to_Scratch_via_Python
         n = len(cmd)
         a = []
         a.append(((n >> 24) & 0xFF))
@@ -76,7 +76,6 @@ class Scratch:
             b += chr(c)
         return bytes(b+cmd,'UTF-8')
 
-
     @staticmethod
     def atom(msg):
         try:
@@ -87,7 +86,8 @@ class Scratch:
             except:
                 return msg.strip('"')
 
-def run(host='localhost', poll=True, msg="Scratra -> Connected\n-> 'stop' to quit", console=True):
+def run(host='localhost', poll=True,
+        msg="Scratra -> Connected\n-> 'stop' to quit",console=True):
     runClass(host, poll, msg, console).start()
 
 # actual threading process
@@ -105,7 +105,7 @@ class runClass(threading.Thread):
         poll = self.poll
         port = 42001
         console = self.console
-        while 1:
+        while True:
             try:
                 scratchSocket.connect((host, port))
             # Except series from scratch.py
@@ -116,11 +116,13 @@ class runClass(threading.Thread):
                 elif poll == True:
                     continue
                 elif err == ECONNREFUSED:
-                    raise ScratchConnectionRefused('Connection refused, try enabling remote sensor connections')
+                    raise ScratchConnectionRefused('Connection refused, \
+                                        try enabling remote sensor connections')
                 else:
                     raise ScratchConnectionError(msge)
             scratchInterface = Scratch()
             break
+
         if console:
             run_console(self.msg).start()
         for func in start_list:
@@ -136,9 +138,11 @@ class runClass(threading.Thread):
                 # If the message is not a sensor-update, but a broadcast
                 if msg.find('sensor-update')==-1 and 'broadcast' in msg:
                     msg = msg[15:-1]
-                    if msg in broadcast_map:
-                        for func in broadcast_map[msg]:
-                            func(scratchInterface)
+                    for (regex,func) in broadcast_map:
+                        # check weather whole line is matched.
+                        if regex.match(msg) != None and regex.match(msg).end() == len(msg):
+                            func(scratchInterface,msg)
+
                 # Otherwise, it must be a sensor-update
                 else:
                     msg = msg[4:]
@@ -146,14 +150,15 @@ class runClass(threading.Thread):
                         msg = msg.split()[1:]
                         i = 0
                         while i < len(msg)-1:
-                            if scratchInterface.atom(msg[i]) in update_map:
-                                scratchInterface.var_values[scratchInterface.atom(msg[i])] = scratchInterface.atom(msg[i+1])
-                                for func in update_map[scratchInterface.atom(msg[i])]:
-                                    func(scratchInterface, scratchInterface.atom(msg[i+1]))
+                            var = scratchInterface.atom(msg[i])
+                            val = scratchInterface.atom(msg[i+1])
+                            scratchInterface.var_values[var] = val
+                            for (regex,func) in update_map:
+                                if regex.match(var) != None and regex.match(var).end() == len(var):
+                                    func(scratchInterface,var,val)
                             i+=2
 
 class run_console(threading.Thread):
-
     def __init__(self, msg):
         self.msg = msg
         threading.Thread.__init__(self)
@@ -171,34 +176,27 @@ class run_console(threading.Thread):
 
 
 # For user convenience, decorator methods
-
 # When Scratch broadcasts this...
+#  match is re.match.
 # @broadcast('scratch_broadcast')
-# def func(scratch): ....
+# def func(scratch,msg): ....
 class broadcast:
-
+    # broadcast is regular expression string.
     def __init__(self, broadcast):
         self.b = broadcast
 
     def __call__(self, func):
-        if self.b in broadcast_map:
-            broadcast_map[self.b].append(func)
-        else:
-            broadcast_map[self.b] = [func]
+        broadcast_map.append((re.compile(self.b),func))
 
 # When this variable is updated...
 # @update('variable')
 # def func(scratch, value): ...
 class update:
-
     def __init__(self, update):
         self.u = update
 
     def __call__(self, func):
-        if self.u in update_map:
-            update_map[self.u].append(func)
-        else:
-            update_map[self.u] = [func]
+        update_map.append((re.compile(self.u),func))
 
 # When we start listening...
 # @start
